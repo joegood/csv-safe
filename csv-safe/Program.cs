@@ -11,6 +11,7 @@ using System.Dynamic;
 using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
+using System.Diagnostics;
 
 
 namespace csv_safe;
@@ -73,7 +74,7 @@ internal class Program
         record = new ExpandoObject();
         record.Id = 3;
         record.Name = "THREE";
-        record.Extra = "This is extra data."; 
+        record.Extra = "This is extra data.";
         records.Add(record);
 
         using (var writer = new StreamWriter("xyzzy.csv"))
@@ -123,14 +124,35 @@ internal class Program
             ArgumentException argEx => $"Argument exception: {argEx.Message}",
             InvalidOperationException opEx => $"Invalid operation: {opEx.Message}",
             NullReferenceException nullRefEx => $"Null reference: {nullRefEx.Message}",
-            
+
             // Add patterns for other specific exception types as needed
 
             _ => $"Unknown exception type: {ex.Message}" // Default case for exceptions not specifically handled
         };
 
-        Console.WriteLine("Error: ".PadRight(Console.WindowWidth));
-        Console.WriteLine(message.PadRight(Console.WindowWidth));
+        Console.WriteLine("Error: ".PadRight(Console.WindowWidth - 1));
+        Console.WriteLine(message.PadRight(Console.WindowWidth - 1));
+
+        // Check if a debugger is attached.  If so, output the method and line number of the exception.
+        if (Debugger.IsAttached)
+        {
+            var st = new StackTrace(ex, true);
+            var frame = st.GetFrame(0); // Get the top frame
+            if (frame != null)
+            {
+                var method = frame.GetMethod();
+                var fileName = frame.GetFileName();
+                var lineNumber = frame.GetFileLineNumber();
+
+                Console.BackgroundColor = ConsoleColor.Gray;
+                // Output the information about the offending function
+                Console.WriteLine($"Offending method: {method?.DeclaringType?.FullName}.{method?.Name}");
+                if (!string.IsNullOrEmpty(fileName) && lineNumber != 0)
+                {
+                    Console.WriteLine($"File: {fileName}, Line: {lineNumber}");
+                }
+            }
+        }
 
         Console.ResetColor();
     }
@@ -167,7 +189,7 @@ internal class Program
             foreach (var _header in headerRecord)
             {
                 var header = _header.Trim();
-                
+
                 // Blank headers are problematic.  Even in the most flexible format, using dynamic objects, since the header is used as a property name, you can have only one empty header.
                 // But even that is problematic.  So I'm going to just call it and require that all fields have a header.
 

@@ -16,11 +16,11 @@ internal class CsvRemapWriter
         SafetyCheckColumnMappings();
 
         // We add two custom mappings to help manage the encryption
-        // SAFE:META and CRYPTOHASH
+        // SAFE_META and CRYPTOHASH
         NewColumnMappings.CheckAdd(new ColumnRemapping
         {
-            InputColumnName = "META",
-            OutputColumnName = "SAFE:META"
+            InputColumnName = "SAFE_META",
+            OutputColumnName = "SAFE_META"
         });
 
         NewColumnMappings.CheckAdd(new ColumnRemapping
@@ -39,7 +39,7 @@ internal class CsvRemapWriter
         // ColumnRemapping will ensure that the names are either null or have a value so we can use the null coalescing operator.
 
         var index = 0;
-        foreach( var column in NewColumnMappings)
+        foreach (var column in NewColumnMappings)
             column.OutputColumnName ??= column.InputColumnName ?? "FIELD_" + index++;
     }
 
@@ -48,13 +48,35 @@ internal class CsvRemapWriter
         // NewColumnMapping is in the order that we expect.
         foreach (var column in NewColumnMappings)
             CsvWriter.WriteField(column.OutputColumnName);
+
+        // TODO: Encrypt the encryptable headers
     }
 
     internal bool WriteRecord(dynamic row)
     {
         if (row == null) return false;
-        var rowDict = row as IDictionary<string, object> ?? new Dictionary<string,object>();
-        if (rowDict.IsEmpty()) return false; // If the row is empty, then we will not write it to the output file.    
+        var rowDict = row as IDictionary<string, object> ?? new Dictionary<string, object>();
+        if (rowDict.IsEmpty()) return false; // If the row is empty, then we will not write it to the output file.
+
+        // NewColumnMappings has all of the expected headers, in order, that the output file will have.
+        // There are some hard-coded fields that were added, "SAFE_META" and "CRYPTOHASH"
+        // It is undertermined yet what SAFE:ELEMENTS will be, but it will be added here.  I anticipate it will hold structure information so the file can be reassembled during the decryption process.
+        // CRYPTOHASH is a MD5 hash of the original values of the encrypted fields.  This is to verify that the data is intact after decryption.
+
+        // Build the input string for the cryptohash.
+        var cryptoHashValues = new StringBuilder();
+        foreach (var column in NewColumnMappings)
+        {
+            if ((column.OutputColumnName ?? "").StartsWith("SAFE:"))
+            {
+                var value = ((rowDict.TryGetValue(column.InputColumnName.ToUpper(), out object? _value) ? _value : null) ?? "").ToString() ?? "";
+                cryptoHashValues.Append(value.Trim());
+            }
+        }
+
+        // Add the cryptohash to the row.
+        rowDict["CRYPTOHASH"] = Cryptonator.HashMD5(cryptoHashValues.ToString());
+        rowDict["SAFE_META"] = "SAFE:ELEMENTS"; // TODO: Add the structure information here.
 
         // NOTE:  There was a configuration option in the CsvReader [PrepareHeaderForMatch = args => args.Header.ToUpper()] that
         // defines the format of the header when is is read into the the dynamic row object.  The original casing was kept in the mappings.
