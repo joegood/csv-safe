@@ -50,10 +50,11 @@ internal class CsvRemapWriter
             CsvWriter.WriteField(column.OutputColumnName);
     }
 
-    internal void WriteRecord(dynamic row)
+    internal bool WriteRecord(dynamic row)
     {
-        if (row == null) return;
+        if (row == null) return false;
         var rowDict = row as IDictionary<string, object> ?? new Dictionary<string,object>();
+        if (rowDict.IsEmpty()) return false; // If the row is empty, then we will not write it to the output file.    
 
         // NOTE:  There was a configuration option in the CsvReader [PrepareHeaderForMatch = args => args.Header.ToUpper()] that
         // defines the format of the header when is is read into the the dynamic row object.  The original casing was kept in the mappings.
@@ -66,5 +67,7 @@ internal class CsvRemapWriter
             var value = rowDict.TryGetValue(column.InputColumnName.ToUpper(), out object? _value) ? _value : string.Empty;
             CsvWriter.WriteField(value);
         }
+
+        return true;
     }
 }

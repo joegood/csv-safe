@@ -95,8 +95,6 @@ internal class Program
 
     static void Main(string[] args)
     {
-        RunCsvHelperExperiment();
-
         try
         {
             var options = new CommandLineOptions(args);
@@ -110,11 +108,31 @@ internal class Program
                 DoDecryptFile(options.InputFile, options.OutputFile, options.Password);
             }
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
-            Console.WriteLine($"Error parsing command-line arguments: {ex.Message}");
-            // Optionally, provide usage information here
+            ReportException(ex);
         }
+    }
+
+    private static void ReportException(Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkRed;
+        Console.BackgroundColor = ConsoleColor.White;
+        var message = ex switch
+        {
+            ArgumentException argEx => $"Argument exception: {argEx.Message}",
+            InvalidOperationException opEx => $"Invalid operation: {opEx.Message}",
+            NullReferenceException nullRefEx => $"Null reference: {nullRefEx.Message}",
+            
+            // Add patterns for other specific exception types as needed
+
+            _ => $"Unknown exception type: {ex.Message}" // Default case for exceptions not specifically handled
+        };
+
+        Console.WriteLine("Error: ".PadRight(Console.WindowWidth));
+        Console.WriteLine(message.PadRight(Console.WindowWidth));
+
+        Console.ResetColor();
     }
 
     private static void DoEncryptFile(string inputFile, string outputFile, string password, List<string> argColumns)
@@ -149,6 +167,12 @@ internal class Program
             foreach (var _header in headerRecord)
             {
                 var header = _header.Trim();
+                
+                // Blank headers are problematic.  Even in the most flexible format, using dynamic objects, since the header is used as a property name, you can have only one empty header.
+                // But even that is problematic.  So I'm going to just call it and require that all fields have a header.
+
+                if (string.IsNullOrWhiteSpace(header)) throw new InvalidOperationException("All columns must have a header name.");
+
                 if (argColumns.Any(c => string.Equals(c, header, StringComparison.OrdinalIgnoreCase)))
                 {
                     var encryptedHeaderName = $"SAFE:{index}:{header}";
@@ -216,13 +240,14 @@ internal class Program
             {
                 // Since we do not know what the CSV file contains, we will use a dynamic object to read the row.
 
-                // TODO:  See how this work swith empty headers, especially more than one empty header.
+                // Blank headers are problematic.  Even in the most flexible format, using dynamic objects, since the header is used as a property name, you can have only one empty header.
+                // Higher up, an exception is raised if blank or empty headers are found.  So we should not have to worry about that here.
 
                 var row = csvReader.GetRecord<dynamic>();
                 if (row == null) continue;
 
-                remapWriter.WriteRecord(row);
-                csvWriter.NextRecord();
+                if (remapWriter.WriteRecord(row))
+                    csvWriter.NextRecord();
 
             } // while read
 
