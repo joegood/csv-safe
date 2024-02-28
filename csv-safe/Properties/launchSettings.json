@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "easy-test-1": {
+      "commandName": "Project",
+      "commandLineArgs": "easy-test-1L.csv -e MYPASSWORD -c BIRTHDAY,\"GENDER\",SSN,\"Hey,You\""
+    }
+  }
+}
