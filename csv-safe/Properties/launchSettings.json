@@ -6,7 +6,7 @@
     },
     "easy-test-1": {
       "commandName": "Project",
-      "commandLineArgs": "contact_list_1_big.csv -e MYPASSWORD -c city,state,zip"
+      "commandLineArgs": "easy-test-1 -e MYPASSWORD -c Birthday,Gender,SSN"
     }
   }
 }

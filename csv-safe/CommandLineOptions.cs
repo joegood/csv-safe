@@ -24,6 +24,10 @@ public class CommandLineOptions
         IsEncryptMode = false;
         IsDecryptMode = false;
         ParseArgs(args);
+
+        // if InputFile does not have an extension, we will add ".csv" to it.
+        if (string.IsNullOrWhiteSpace(Path.GetExtension(InputFile)))
+            InputFile += ".csv";
     }
 
     private void ParseArgs(string[] args)
