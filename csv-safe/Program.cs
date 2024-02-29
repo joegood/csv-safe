@@ -22,7 +22,7 @@ Purpose:  To allow a user to encrypt a selected subset of fields/columns in a CS
 to be read or manipulated by a third party, then unencrypted when the file is returned.
 
 Requirements:
-1. C#, .Net 8
+1. C#, .Net 8  |  Published as 'self contained', so it can run on any platform.
 2. Command-Line / Console Application
 3. Accepts command like parameters:  csv-safe.exe input_file.csv (-e|-d|--encrypt|--decrypt) password [-o output_file.csv] [(-c|--columns) col1,"col2","col2,again",col3]
    -e or --encrypt triggers encryption mode
@@ -35,10 +35,9 @@ Requirements:
    columns is required when encrypting and not used when decrypting.
 4. Can work with CSV files greater than the RAM of the machine.  
 5. Uses the library CsvHelper, installed with "dotnet add package CsvHelper"
-6. The encryption function uses a salt of "XYZZY"
-7. The encryption algorithm is AES-128
-8. The column names will be encrypted as well.  Prior to encryption, the column name is changed to "SAFE:{NAME}".
-9. When the CSV file is decrypted, every column header name has a decryption attempt on it.  If a column is successfully decrypted and the resulting name begins with "SAFE:", we know that column was a column originally encrypted by this user and valid for decryption.
+7. The encryption algorithm is AES
+8. The column names will be encrypted as well and move to the right/end of the row.
+9. When the CSV file is decrypted, encrypted columns are put back into their original position.
 */
 
 
@@ -58,41 +57,6 @@ internal class Program
         CacheFields = true,
         Comment = '#'
     };
-
-    private static void RunCsvHelperExperiment()
-    {
-        var records = new List<dynamic>();
-
-        dynamic record = new ExpandoObject();
-        record.Id = 1;
-        record.Name = "one";
-        records.Add(record);
-        record = new ExpandoObject();
-        record.Id = 2;
-        record.Name = "TWO";
-        records.Add(record);
-        record = new ExpandoObject();
-        record.Id = 3;
-        record.Name = "THREE";
-        record.Extra = "This is extra data.";
-        records.Add(record);
-
-        using (var writer = new StreamWriter("xyzzy.csv"))
-        using (var csv = new CsvWriter(writer, config))
-        {
-            // .WriteEncryptedRecord against a List<dynamic> works, but they're all in memory.
-            // csv.WriteRecords(records);
-            csv.WriteDynamicHeader(records[0]);
-            csv.NextRecord();
-            foreach (var rec in records)
-            {
-                csv.WriteRecord(rec);
-                csv.NextRecord();
-            }
-            writer.Flush();
-        }
-
-    }
 
     static void Main(string[] args)
     {
