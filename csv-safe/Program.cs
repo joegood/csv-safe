@@ -160,7 +160,6 @@ internal class Program
     private static void DoEncryptFile(string inputFile, string outputFile, string password, List<string> argColumns)
     {
         /* Initial processing of header row to determine which columns are to be encrypted.
-         * All encryption is AES-128 with a salt of "XYZZY"
          * The column list is human-entered and may not match the actual column names in the file.
          * For each column in list, scan the header row for a match. If no match, print a yellow warning message that the column was not found.
          * For each column that matches, the header name is changed to "SAFE:INDEX:NAME" where INDEX is the 0-based index of the column and NAME is the original column name.
@@ -178,7 +177,7 @@ internal class Program
         var foundColumns = new List<string>();
 
         using (var reader = new StreamReader(inputFile))
-        using (var csvReader = new CsvReader(reader, new CsvConfiguration(System.Globalization.CultureInfo.InvariantCulture) { PrepareHeaderForMatch = args => args.Header.ToLower() }))
+        using (var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture) { PrepareHeaderForMatch = args => args.Header.ToLower() }))
         {
             csvReader.Read();
             csvReader.ReadHeader();
@@ -235,6 +234,8 @@ internal class Program
         foreach (var column in encryptedColumns)
         {
             column.OutputColumnIndex = rindex;
+            column.IsValueEncrypted = true;
+            column.IsHeaderEncrypted = true;
             newColumnMapping.Add(column);
             rindex++;
         }
@@ -251,12 +252,13 @@ internal class Program
             // The output CSV needs to have the original column names replaced with the encrypted column names
             // As we read row by row, values from the reader are written to the writer using the encrypted column names.
 
-            var remapWriter = new CsvRemapWriter(csvWriter, newColumnMapping);
+            var remapWriter = new CsvRemapWriter(csvWriter, newColumnMapping, password);
 
             // Write the new header to the output file
             remapWriter.WriteHeader();
             csvWriter.NextRecord();
 
+            var count = 0;
             // Process each row
             while (csvReader.Read())
             {
@@ -270,6 +272,10 @@ internal class Program
 
                 if (remapWriter.WriteRecord(row))
                     csvWriter.NextRecord();
+
+                count++;
+                if (count % 10000 == 0) Console.WriteLine($"{count}");
+                //if (count > 3000) break;
 
             } // while read
 

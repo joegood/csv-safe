@@ -8,6 +8,9 @@ namespace csv_safe;
 
 internal class ColumnRemapping : ICloneable
 {
+    public bool IsHeaderEncrypted { get; set; } = false;
+    public bool IsValueEncrypted { get; set; } = false;
+
     public int InputColumnIndex { get; set; } = -1;
     public int OutputColumnIndex { get; set; } = -1;
 
@@ -24,6 +27,8 @@ internal class ColumnRemapping : ICloneable
     {
         return new ColumnRemapping
         {
+            IsHeaderEncrypted = this.IsHeaderEncrypted,
+            IsValueEncrypted = this.IsValueEncrypted,
             InputColumnIndex = this.InputColumnIndex,
             OutputColumnIndex = this.OutputColumnIndex,
             InputColumnName = this.InputColumnName,

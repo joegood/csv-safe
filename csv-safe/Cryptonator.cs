@@ -23,7 +23,13 @@ internal class Cryptonator
 
     public static string EncryptAES(string value, string password)
     {
-        if (string.IsNullOrEmpty(value) || string.IsNullOrWhiteSpace(password)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(password)) return string.Empty;
+
+        // We want to allow empty values to be encrypted, but trimmed, because having a blank could be giving away info about the data.
+        // Example, if the field was "PassedHeartScreenCheck" and the value was "", then we know that the person did not pass the check.
+        // I know the header name is also encrypted but in case the header name is decrypted or inferred, we still do not want access to free info.
+
+        value = (value ?? "").Trim();
 
         byte[] encryptedBytes;
         byte[] salt = new byte[SALT_BYTES_SIZE];
@@ -32,7 +38,7 @@ internal class Cryptonator
 
         using (Aes aesAlg = Aes.Create())
         {
-            var pdb = new Rfc2898DeriveBytes(password, salt, 10000, HashAlgorithmName.SHA256);
+            var pdb = new Rfc2898DeriveBytes(password, salt, 3, HashAlgorithmName.SHA256);
             aesAlg.Key = pdb.GetBytes(32); // AES-256
             aesAlg.IV = pdb.GetBytes(16); // AES block size is 128 bits
 

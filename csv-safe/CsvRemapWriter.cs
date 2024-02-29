@@ -9,8 +9,14 @@ using System.Threading.Tasks;
 namespace csv_safe;
 internal class CsvRemapWriter
 {
-    public CsvRemapWriter(CsvWriter csvWriter, List<ColumnRemapping> mappings)
+    private string Password { get; set; }
+
+    public CsvRemapWriter(CsvWriter csvWriter, List<ColumnRemapping> mappings, string password)
     {
+        ArgumentNullException.ThrowIfNull(csvWriter);
+        ArgumentNullException.ThrowIfNull(mappings);
+        if (string.IsNullOrWhiteSpace(password)) throw new ArgumentNullException(nameof(password));
+
         CsvWriter = csvWriter;
         NewColumnMappings = mappings.Clone(); // I want to be able to change this internally w/out affecting the original.
         SafetyCheckColumnMappings();
@@ -20,14 +26,19 @@ internal class CsvRemapWriter
         NewColumnMappings.CheckAdd(new ColumnRemapping
         {
             InputColumnName = "SAFE_META",
-            OutputColumnName = "SAFE_META"
+            OutputColumnName = "SAFE_META",
+            IsValueEncrypted = true,
+            IsHeaderEncrypted = true
         });
 
         NewColumnMappings.CheckAdd(new ColumnRemapping
         {
             InputColumnName = "CRYPTOHASH",
-            OutputColumnName = "CRYPTOHASH"
+            OutputColumnName = "CRYPTOHASH",
+            IsHeaderEncrypted = true
         });
+
+        Password = password;
     }
 
     public CsvWriter CsvWriter { get; }
@@ -47,9 +58,13 @@ internal class CsvRemapWriter
     {
         // NewColumnMapping is in the order that we expect.
         foreach (var column in NewColumnMappings)
-            CsvWriter.WriteField(column.OutputColumnName);
+        {
+            if (column.IsHeaderEncrypted)
+                CsvWriter.WriteField(Cryptonator.EncryptAES(column.OutputColumnName ?? "", this.Password));
+            else
+                CsvWriter.WriteField(column.OutputColumnName);
+        }
 
-        // TODO: Encrypt the encryptable headers
     }
 
     internal bool WriteRecord(dynamic row)
@@ -86,7 +101,9 @@ internal class CsvRemapWriter
 
         foreach (var column in NewColumnMappings)
         {
-            var value = rowDict.TryGetValue(column.InputColumnName.ToUpper(), out object? _value) ? _value : string.Empty;
+            var value = ((rowDict.TryGetValue(column.InputColumnName.ToUpper(), out object? _value) ? _value : null) ?? "").ToString() ?? "";
+            if (column.IsValueEncrypted)
+                value = Cryptonator.EncryptAES(value.ToString(), this.Password);
             CsvWriter.WriteField(value);
         }
 
