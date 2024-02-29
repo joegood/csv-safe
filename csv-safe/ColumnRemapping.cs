@@ -10,6 +10,7 @@ internal class ColumnRemapping : ICloneable
 {
     public bool IsHeaderEncrypted { get; set; } = false;
     public bool IsValueEncrypted { get; set; } = false;
+    public bool IncludeInOutput { get; set; } = true;
 
     public int InputColumnIndex { get; set; } = -1;
     public int OutputColumnIndex { get; set; } = -1;
@@ -29,6 +30,7 @@ internal class ColumnRemapping : ICloneable
         {
             IsHeaderEncrypted = this.IsHeaderEncrypted,
             IsValueEncrypted = this.IsValueEncrypted,
+            IncludeInOutput = this.IncludeInOutput,
             InputColumnIndex = this.InputColumnIndex,
             OutputColumnIndex = this.OutputColumnIndex,
             InputColumnName = this.InputColumnName,

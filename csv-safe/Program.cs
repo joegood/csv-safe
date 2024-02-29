@@ -80,7 +80,7 @@ internal class Program
         using (var writer = new StreamWriter("xyzzy.csv"))
         using (var csv = new CsvWriter(writer, config))
         {
-            // .WriteRecord against a List<dynamic> works, but they're all in memory.
+            // .WriteEncryptedRecord against a List<dynamic> works, but they're all in memory.
             // csv.WriteRecords(records);
             csv.WriteDynamicHeader(records[0]);
             csv.NextRecord();
@@ -177,7 +177,7 @@ internal class Program
         var foundColumns = new List<string>();
 
         using (var reader = new StreamReader(inputFile))
-        using (var csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture) { PrepareHeaderForMatch = args => args.Header.ToLower() }))
+        using (var csvReader = new CsvReader(reader, config))
         {
             csvReader.Read();
             csvReader.ReadHeader();
@@ -252,10 +252,10 @@ internal class Program
             // The output CSV needs to have the original column names replaced with the encrypted column names
             // As we read row by row, values from the reader are written to the writer using the encrypted column names.
 
-            var remapWriter = new CsvRemapWriter(csvWriter, newColumnMapping, password);
+            var remapWriter = new CsvRemapWriter(csvWriter, newColumnMapping, password, addEncryptingMetadata: true);
 
             // Write the new header to the output file
-            remapWriter.WriteHeader();
+            remapWriter.WriteEncryptedHeader();
             csvWriter.NextRecord();
 
             var count = 0;
@@ -270,12 +270,11 @@ internal class Program
                 var row = csvReader.GetRecord<dynamic>();
                 if (row == null) continue;
 
-                if (remapWriter.WriteRecord(row))
+                if (remapWriter.WriteEncryptedRecord(row))
                     csvWriter.NextRecord();
 
                 count++;
                 if (count % 10000 == 0) Console.WriteLine($"{count}");
-                //if (count > 3000) break;
 
             } // while read
 
@@ -286,7 +285,132 @@ internal class Program
 
     private static void DoDecryptFile(string inputFile, string outputFile, string password)
     {
-        throw new NotImplementedException();
-    }
+        /* The first attempt will be to just reverse the logic in the DoEncryptFile method.
+         * The header row is read and the column names are decrypted.
+         * From the header row, a mapping is made of the original column name to the new column name.
+         * The header row is written to the output file.
+         * Each row is read and the encrypted columns are decrypted.
+         * The row is written to the output file.
+         */
 
+        var foundColumns = new List<ColumnRemapping>();
+        var toBeMovedColumns = new List<ColumnRemapping>();
+        ColumnRemapping? cryptoHashMapping = null;
+
+        using (var reader = new StreamReader(inputFile))
+        using (var csvReader = new CsvReader(reader, config))
+        {
+            csvReader.Read();
+            csvReader.ReadHeader();
+            var headerRecord = csvReader.HeaderRecord;
+
+            // Initial processing of header row to determine columns to be to be decrypted and rearranged
+            int index = 0;
+            foreach (var _header in headerRecord)
+            {
+                var header = _header.Trim();
+
+                // Blank headers are problematic.  Even in the most flexible format, using dynamic objects, since the header is used as a property name, you can have only one empty header.
+                // But even that is problematic.  So I'm going to just call it and require that all fields have a header.
+
+                if (string.IsNullOrWhiteSpace(header)) throw new InvalidOperationException("All columns must have a header name.");
+
+                // Every header will be decrypted.  If the header is a valid encrypted header, it will begin with "SAFE:" or be "CRYPTOHASH".
+                // If the header does not decrypt (due to padding issues, etc.), or not match the above patterns, it will be left as is.
+                // Currently, all special encryption related fields are moved to the end.  There is no guarantee that they will be in the same order as the file is manipulated by a third party.
+
+                if (Cryptonator.TryUnmaskStringFromHex(header, password, out var _decryptedHeader))
+                    if (_decryptedHeader != null)
+                    {
+                        // It was the correct shape to decrypt, now to see if it actually did decrypt propertly.
+                        string decryptedHeader = (_decryptedHeader ?? "");
+
+                        // Every successful identification of an encrypted field will trigger a continue of the for loop to jump to the next field
+
+                        if (decryptedHeader.StartsWith("SAFE:"))
+                        {
+                            var parts = decryptedHeader.Split(':');
+                            if (parts.Length == 3 && int.TryParse(parts[1], out var indexValue))
+                            {
+                                toBeMovedColumns.Add(new ColumnRemapping { InputColumnName = header, InputColumnIndex = index, OutputColumnName = parts[2], OutputColumnIndex = indexValue, IsValueEncrypted = true, IsHeaderEncrypted = true });
+                                index++;
+                                continue;
+                            }
+                        }
+                        else if (decryptedHeader == "CRYPTOHASH")
+                        {
+                            cryptoHashMapping = new ColumnRemapping { InputColumnName = header, InputColumnIndex = index, OutputColumnName = "CRYPTOHASH", OutputColumnIndex = index, IsValueEncrypted = false, IsHeaderEncrypted = true, IncludeInOutput = false };
+                            index++;
+                            continue;
+                        }
+                    } // if decrypted
+
+                // Either it wasn't decrypted or it wasn't a valid encrypted header.  Either way, it's a regular column.
+                foundColumns.Add(new ColumnRemapping { InputColumnName = header, InputColumnIndex = index, OutputColumnName = header, OutputColumnIndex = index, IsValueEncrypted = false, IsHeaderEncrypted = false });
+                index++;
+
+            } // foreach header
+        } // using reader
+
+        // The foundColumns list now contains a mapping of the original column name to the new column name, but it is not in the order that we want.
+        // The index here was determined by the order discovered in the file. But the encrypted fields contained their original index, so we insert them back into the list in the correct order.
+        // We need to start with the lowest index and work our way up.
+
+        foreach (var colToMove in toBeMovedColumns.OrderBy(c => c.OutputColumnIndex))
+            foundColumns.Insert(colToMove.OutputColumnIndex, colToMove);
+
+        // Now that the columns are physically in the correct order, go back and reset the OutputColumnIndex to match.
+        var sindex = 0;
+        foreach (var column in foundColumns)
+            column.OutputColumnIndex = sindex++;  // sindex 😈 🤘
+
+
+        using (var reader = new StreamReader(inputFile))
+        using (var writer = new StreamWriter(outputFile))
+        using (var csvReader = new CsvReader(reader, config))
+        using (var csvWriter = new CsvWriter(writer, config))
+        {
+
+            var remapWriter = new CsvRemapWriter(csvWriter, foundColumns, password, addDecryptingMetadata: cryptoHashMapping != null); // only add the decrypt metadata if there is a crypto hash mapping
+
+            // Prototype this out to make sure we get the columns put back into the correct order first
+
+            // Write the new header to the output file
+            // Headers were already decrypted above.. so the OutputColumnName is the correct name.
+            remapWriter.WriteHeader();
+            csvWriter.NextRecord();
+
+            var count = 0;
+            // Process each row
+            while (csvReader.Read())
+            {
+                // Since we do not know what the CSV file contains, we will use a dynamic object to read the row.
+
+                // Just like with the encryption loop, blank headers are problematic.
+                // Higher up, an exception is raised if blank or empty headers are found.
+
+                var row = csvReader.GetRecord<dynamic>();
+                if (row == null) continue;
+
+                // Unlike the encryption loop, we need to check the hash if it is present
+                string? rowhash = null;
+                if (cryptoHashMapping != null)
+                {
+                    // Get the stored hash from the row and put it in the rowhash variable
+                    rowhash = (row as IDictionary<string,object>)?.SafeToString(cryptoHashMapping.InputColumnName);
+                }
+
+                bool hashMatch = false;
+
+                if (remapWriter.WriteDecryptedRecord(row, rowhash, out hashMatch))
+                    csvWriter.NextRecord();
+
+                count++;
+                if (count % 10000 == 0) Console.WriteLine($"{count}");
+
+
+            } // while read
+
+        } // usings
+    } // DoDecryptFile
 }

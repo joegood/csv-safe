@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +11,7 @@ namespace csv_safe;
 internal class Cryptonator
 {
     private const int SALT_BYTES_SIZE = 4;  // A small salt.. but we don't need to be super-secure here
+    private const int KEY_ITERATIONS = 3; // For real encryption, this should be very high but for this purpose, it's fine. We need volume.
 
     internal static string HashMD5(string value)
     {
@@ -38,7 +40,7 @@ internal class Cryptonator
 
         using (Aes aesAlg = Aes.Create())
         {
-            var pdb = new Rfc2898DeriveBytes(password, salt, 3, HashAlgorithmName.SHA256);
+            var pdb = new Rfc2898DeriveBytes(password, salt, KEY_ITERATIONS, HashAlgorithmName.SHA256);
             aesAlg.Key = pdb.GetBytes(32); // AES-256
             aesAlg.IV = pdb.GetBytes(16); // AES block size is 128 bits
 
@@ -76,7 +78,7 @@ internal class Cryptonator
 
         using (Aes aesAlg = Aes.Create())
         {
-            var pdb = new Rfc2898DeriveBytes(password, salt, 10000, HashAlgorithmName.SHA256);
+            var pdb = new Rfc2898DeriveBytes(password, salt, KEY_ITERATIONS, HashAlgorithmName.SHA256);
             aesAlg.Key = pdb.GetBytes(32); // AES-256
             aesAlg.IV = pdb.GetBytes(16);
 
@@ -91,9 +93,25 @@ internal class Cryptonator
         return plaintext;
     }
 
+    internal static bool TryDecryptAES(string value, string password, out string? decrypted)
+    {
+        try
+        {
+            decrypted = DecryptAES(value, password);
+            return true;
+        }
+        catch (Exception)
+        {
+            decrypted = null;
+            return false;
+        }
+    }
+
     internal static string Encrypt(string value, string password) => EncryptAES(value, password);
 
     internal static string Decrypt(string value, string password) => DecryptAES(value, password);
+
+    internal static bool TryDecrypt(string value, string password, out string? decrypted) => TryDecryptAES(value, password, out decrypted);
 
     internal static string RollBase64(byte[] bytes)
     {
@@ -109,5 +127,63 @@ internal class Cryptonator
         return Convert.FromBase64String(value);
     }
 
+    public static string MaskStringAsHex(string value, string mask)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        if (string.IsNullOrEmpty(mask)) mask = value;
+
+        while (mask.Length < value.Length) { mask += mask; }
+        mask = mask[..value.Length]; // make them both the same length
+
+        // Convert strings to byte arrays
+        byte[] valueBytes = Encoding.UTF8.GetBytes(value);
+        byte[] maskBytes = Encoding.UTF8.GetBytes(mask);
+
+        // Perform XOR operation
+        byte[] resultBytes = new byte[valueBytes.Length];
+        for (int i = 0; i < valueBytes.Length; i++)
+        {
+            resultBytes[i] = (byte)(valueBytes[i] ^ maskBytes[i]); // xor
+        }
+
+        // Convert the bytes to a hex string
+        return Convert.ToHexString(resultBytes);
+    }
+
+    public static string UnmaskStringFromHex(string value, string mask)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        ArgumentException.ThrowIfNullOrEmpty(mask, nameof(mask));
+
+        byte[] valueBytes = Convert.FromHexString(value);
+
+        while (mask.Length < valueBytes.Length) { mask += mask; }
+        mask = mask[..valueBytes.Length]; // make them both the same length
+        byte[] maskBytes = Encoding.UTF8.GetBytes(mask);
+
+        // Perform XOR operation
+        byte[] resultBytes = new byte[valueBytes.Length];
+        for (int i = 0; i < valueBytes.Length; i++)
+        {
+            resultBytes[i] = (byte)(valueBytes[i] ^ maskBytes[i]); // xor
+        }
+
+        // Convert the bytes to a regular string
+        return Encoding.UTF8.GetString(resultBytes);
+    }
+
+    public static bool TryUnmaskStringFromHex(string value, string mask, out string? unmasked)
+    {
+        try
+        {
+            unmasked = UnmaskStringFromHex(value, mask);
+            return true;
+        }
+        catch (Exception)
+        {
+            unmasked = null;
+            return false;
+        }
+    }   
 
 }
