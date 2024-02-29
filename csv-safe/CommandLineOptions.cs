@@ -76,15 +76,15 @@ public class CommandLineOptions
             var inputSansExt = Path.GetFileNameWithoutExtension(InputFile);
             if (IsEncryptMode)
             {
-                if (inputSansExt.ToLower().EndsWith("_decrypted"))
+                if (inputSansExt.ToLower().EndsWith("-decrypted"))
                     inputSansExt = $"{inputSansExt[..^10]}";
-                OutputFile = $"{inputSansExt}_safe.csv";
+                OutputFile = $"{inputSansExt}-safe.csv";
             }
             else if (IsDecryptMode)
             {
-                if (inputSansExt.ToLower().EndsWith("_safe"))
+                if (inputSansExt.ToLower().EndsWith("-safe"))
                     inputSansExt = $"{inputSansExt[..^5]}";
-                OutputFile = $"{inputSansExt}_decrypted.csv";
+                OutputFile = $"{inputSansExt}-decrypted.csv";
             }
         }
     }

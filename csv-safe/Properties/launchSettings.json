@@ -6,7 +6,7 @@
     },
     "decrypt e-t-1": {
       "commandName": "Project",
-      "commandLineArgs": "easy-test-1_safe.csv --decrypt MYPASSWORD"
+      "commandLineArgs": "easy-test-1-safe.csv --decrypt MYPASSWORD"
     },
     "encrypt e-t-1": {
       "commandName": "Project",
@@ -18,7 +18,7 @@
     },
     "decrypt e-t-1L": {
       "commandName": "Project",
-      "commandLineArgs": "easy-test-1L_safe.csv --decrypt MYPASSWORD"
+      "commandLineArgs": "easy-test-1L-safe.csv --decrypt MYPASSWORD"
     }
   }
 }
