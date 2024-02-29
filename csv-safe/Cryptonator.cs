@@ -135,19 +135,23 @@ internal class Cryptonator
         while (mask.Length < value.Length) { mask += mask; }
         mask = mask[..value.Length]; // make them both the same length
 
-        // Convert strings to byte arrays
+        // Generate a random hex digit
+        Random rnd = new();
+        byte salt = (byte)rnd.Next(0, 16); // 0x00 to 0x0F
+
+        // Convert strings and salt to byte arrays
         byte[] valueBytes = Encoding.UTF8.GetBytes(value);
         byte[] maskBytes = Encoding.UTF8.GetBytes(mask);
 
-        // Perform XOR operation
+        // Perform XOR operation with value and mask, then with salt
         byte[] resultBytes = new byte[valueBytes.Length];
         for (int i = 0; i < valueBytes.Length; i++)
         {
-            resultBytes[i] = (byte)(valueBytes[i] ^ maskBytes[i]); // xor
+            resultBytes[i] = (byte)(valueBytes[i] ^ maskBytes[i] ^ salt); // xor with mask then salt
         }
 
-        // Convert the bytes to a hex string
-        return Convert.ToHexString(resultBytes);
+        // Convert the bytes to a hex string and prepend the salt
+        return salt.ToString("X") + Convert.ToHexString(resultBytes);
     }
 
     public static string UnmaskStringFromHex(string value, string mask)
@@ -155,22 +159,35 @@ internal class Cryptonator
         if (string.IsNullOrEmpty(value)) return "";
         ArgumentException.ThrowIfNullOrEmpty(mask, nameof(mask));
 
+        // If this doesn't have a salt digit, then it isn't a masked string.
+        // Not saying that it is a masked string, but this is one way to quickly filter out non-masked strings.
+        var c_salt = (char)value[0];
+        if (c_salt < '0' || (c_salt > '9' && c_salt < 'A') || c_salt > 'F') return "";
+
+        // Extract salt digit from the value
+        byte salt = Convert.ToByte(value[..1], 16);
+        value = value[1..]; // Remove the salt digit from the value
+
+        // If the value is not a multiple of 2, it is not a valid hex string..
+        if (value.Length % 2 != 0) return "";
+
         byte[] valueBytes = Convert.FromHexString(value);
 
         while (mask.Length < valueBytes.Length) { mask += mask; }
         mask = mask[..valueBytes.Length]; // make them both the same length
         byte[] maskBytes = Encoding.UTF8.GetBytes(mask);
 
-        // Perform XOR operation
+        // Perform XOR operation with salt and then mask
         byte[] resultBytes = new byte[valueBytes.Length];
         for (int i = 0; i < valueBytes.Length; i++)
         {
-            resultBytes[i] = (byte)(valueBytes[i] ^ maskBytes[i]); // xor
+            resultBytes[i] = (byte)(valueBytes[i] ^ salt ^ maskBytes[i]); // xor with salt then mask
         }
 
-        // Convert the bytes to a regular string
+        // Convert the bytes back to a regular string
         return Encoding.UTF8.GetString(resultBytes);
     }
+
 
     public static bool TryUnmaskStringFromHex(string value, string mask, out string? unmasked)
     {

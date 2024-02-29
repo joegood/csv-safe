@@ -11,6 +11,14 @@
     "encrypt e-t-1": {
       "commandName": "Project",
       "commandLineArgs": "easy-test-1 -e MYPASSWORD -c Birthday,Gender,SSN"
+    },
+    "encrypt e-t-1L": {
+      "commandName": "Project",
+      "commandLineArgs": "easy-test-1L -e MYPASSWORD -c Birthday,Gender,SSN"
+    },
+    "decrypt e-t-1L": {
+      "commandName": "Project",
+      "commandLineArgs": "easy-test-1L_safe.csv --decrypt MYPASSWORD"
     }
   }
 }
